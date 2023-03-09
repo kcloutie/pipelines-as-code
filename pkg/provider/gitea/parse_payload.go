@@ -17,6 +17,7 @@ func (v *Provider) ParsePayload(_ context.Context, _ *params.Run, request *http.
 ) (*info.Event, error) {
 	// TODO: parse request to figure out which event
 	var processedEvent *info.Event
+	processedEvent.RawPayload = provider.ToCompressedJson(payload)
 
 	eventType := request.Header.Get("X-Gitea-Event-Type")
 	if eventType == "" {

@@ -100,6 +100,7 @@ func parsePayloadType(event, rawPayload string) (interface{}, error) {
 
 func (v *Provider) ParsePayload(ctx context.Context, run *params.Run, request *http.Request, payload string) (*info.Event, error) {
 	processedEvent := info.NewEvent()
+	processedEvent.RawPayload = provider.ToCompressedJson(payload)
 
 	event := request.Header.Get("X-Event-Key")
 	eventInt, err := parsePayloadType(event, payload)

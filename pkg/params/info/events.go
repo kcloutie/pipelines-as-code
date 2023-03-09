@@ -34,7 +34,7 @@ type Event struct {
 	SHATitle          string // commit title for UIs
 	PullRequestNumber int    // Pull or Merge Request number
 	PullRequestTitle  string // Title of the pull Request
-
+	RawPayload        string // The contents of the webhook payload
 	// TODO: move forge specifics to each driver
 	// Github
 	Organization   string

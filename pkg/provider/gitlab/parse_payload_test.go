@@ -6,6 +6,7 @@ import (
 
 	"github.com/openshift-pipelines/pipelines-as-code/pkg/params"
 	"github.com/openshift-pipelines/pipelines-as-code/pkg/params/info"
+	"github.com/openshift-pipelines/pipelines-as-code/pkg/provider"
 	thelp "github.com/openshift-pipelines/pipelines-as-code/pkg/provider/gitlab/test"
 	"github.com/xanzy/go-gitlab"
 	"gotest.tools/v3/assert"
@@ -182,6 +183,7 @@ func TestParsePayload(t *testing.T) {
 				assert.Equal(t, tt.want.EventType, got.EventType)
 				assert.Equal(t, tt.want.Organization, got.Organization)
 				assert.Equal(t, tt.want.Repository, got.Repository)
+				assert.Equal(t, provider.ToCompressedJson(tt.args.payload), got.RawPayload)
 				if tt.want.TargetTestPipelineRun != "" {
 					assert.Equal(t, tt.want.TargetTestPipelineRun, got.TargetTestPipelineRun)
 				}

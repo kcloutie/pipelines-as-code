@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/json"
 	"net/url"
 	"regexp"
 	"strings"
@@ -76,4 +77,19 @@ func CompareHostOfURLS(uri1, uri2 string) bool {
 		return false
 	}
 	return u1.Host == u2.Host
+}
+
+func ToCompressedJson(payload string) string {
+	if !strings.Contains(payload, "\n") {
+		return payload
+	}
+	var rawObj map[string]interface{}
+	if err := json.Unmarshal([]byte(payload), &rawObj); err != nil {
+		return ""
+	}
+	compressedJson, err := json.Marshal(&rawObj)
+	if err != nil {
+		return ""
+	}
+	return string(compressedJson)
 }

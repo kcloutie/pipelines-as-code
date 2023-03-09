@@ -18,6 +18,7 @@ func (v *Provider) ParsePayload(_ context.Context, _ *params.Run, request *http.
 ) (*info.Event, error) {
 	// TODO: parse request to figure out which event
 	var processedEvent *info.Event
+	processedEvent.RawPayload = provider.ToCompressedJson(payload)
 
 	event := request.Header.Get("X-Gitlab-Event")
 	if event == "" {

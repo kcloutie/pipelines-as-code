@@ -162,6 +162,7 @@ func (v *Provider) ParsePayload(ctx context.Context, run *params.Run, request *h
 		return nil, err
 	}
 
+	processedEvent.RawPayload = provider.ToCompressedJson(payload)
 	// regenerate token scoped to the repo IDs
 	if run.Info.Pac.SecretGHAppRepoScoped && installationIDFrompayload != -1 && len(v.repositoryIDs) > 0 {
 		if run.Info.Pac.SecretGhAppTokenScopedExtraRepos != "" {

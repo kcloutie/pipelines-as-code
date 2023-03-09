@@ -42,6 +42,8 @@ func Process(event *info.Event, repo *v1alpha1.Repository, template string) stri
 		"source_branch":    formatting.SanitizeBranch(event.HeadBranch),
 		"sender":           strings.ToLower(event.Sender),
 		"target_namespace": repo.GetNamespace(),
+		"raw_payload":      event.RawPayload,
+		"event_type":       event.EventType,
 	}
 	// we don't want to get a 0 replaced
 	if event.PullRequestNumber != 0 {
