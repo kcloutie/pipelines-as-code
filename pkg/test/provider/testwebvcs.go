@@ -21,6 +21,7 @@ type TestProviderImp struct {
 	CreateStatusErorring   bool
 	FilesInsideRepo        map[string]string
 	WantProviderRemoteTask bool
+	WantChangedFiles       []string
 }
 
 func (v *TestProviderImp) SetLogger(_ *zap.SugaredLogger) {
@@ -79,8 +80,8 @@ func (v *TestProviderImp) GetFileInsideRepo(_ context.Context, _ *info.Event, fi
 	return "", fmt.Errorf("could not find %s in tests", file)
 }
 
-func (v *TestProviderImp) GetFiles(_ context.Context, _ *info.Event) ([]string, error) {
-	return []string{}, nil
+func (v *TestProviderImp) GetFiles(_ context.Context, _ *info.Event) ([]string, []string, []string, []string, []string, error) {
+	return []string{}, []string{}, []string{}, []string{}, []string{}, nil
 }
 
 func (v *TestProviderImp) CreateToken(_ context.Context, _ []string, _ *params.Run, _ *info.Event) (string, error) {

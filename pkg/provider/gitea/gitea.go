@@ -296,9 +296,9 @@ func (v *Provider) GetCommitInfo(_ context.Context, runevent *info.Event) error 
 	return nil
 }
 
-func (v *Provider) GetFiles(_ context.Context, _ *info.Event) ([]string, error) {
+func (v *Provider) GetFiles(_ context.Context, _ *info.Event) ([]string, []string, []string, []string, []string, error) {
 	// TODO: figure out a way
-	return []string{}, fmt.Errorf("GetFiles is not supported on Gitea")
+	return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("GetFiles is not supported on Gitea")
 }
 
 func (v *Provider) CreateToken(_ context.Context, _ []string, _ *params.Run, _ *info.Event) (string, error) {

@@ -407,31 +407,65 @@ func (v *Provider) getPullRequest(ctx context.Context, runevent *info.Event) (*i
 }
 
 // GetFiles get a files from pull request
-func (v *Provider) GetFiles(ctx context.Context, runevent *info.Event) ([]string, error) {
+func (v *Provider) GetFiles(ctx context.Context, runevent *info.Event) ([]string, []string, []string, []string, []string, error) {
 	if runevent.TriggerTarget == "pull_request" {
 		repoCommit, _, err := v.Client.PullRequests.ListFiles(ctx, runevent.Organization, runevent.Repository, runevent.PullRequestNumber, &github.ListOptions{})
 		if err != nil {
-			return []string{}, err
+			return []string{}, []string{}, []string{}, []string{}, []string{}, err
 		}
-		result := []string{}
+		allChangedFiles := []string{}
+		addedFiles := []string{}
+		deletedFiles := []string{}
+		modifiedFiles := []string{}
+		renamedFiles := []string{}
+
 		for j := range repoCommit {
-			result = append(result, *repoCommit[j].Filename)
+			allChangedFiles = append(allChangedFiles, *repoCommit[j].Filename)
+			if *repoCommit[j].Status == "added" {
+				addedFiles = append(addedFiles, *repoCommit[j].Filename)
+			}
+			if *repoCommit[j].Status == "removed" {
+				deletedFiles = append(deletedFiles, *repoCommit[j].Filename)
+			}
+			if *repoCommit[j].Status == "modified" {
+				modifiedFiles = append(modifiedFiles, *repoCommit[j].Filename)
+			}
+			if *repoCommit[j].Status == "renamed" {
+				renamedFiles = append(renamedFiles, *repoCommit[j].Filename)
+			}
 		}
-		return result, nil
+		return allChangedFiles, addedFiles, deletedFiles, modifiedFiles, renamedFiles, nil
 	}
 
 	if runevent.TriggerTarget == "push" {
-		result := []string{}
+		allChangedFiles := []string{}
+		addedFiles := []string{}
+		deletedFiles := []string{}
+		modifiedFiles := []string{}
+		renamedFiles := []string{}
+
 		rC, _, err := v.Client.Repositories.GetCommit(ctx, runevent.Organization, runevent.Repository, runevent.SHA, &github.ListOptions{})
 		if err != nil {
-			return []string{}, err
+			return []string{}, []string{}, []string{}, []string{}, []string{}, err
 		}
 		for i := range rC.Files {
-			result = append(result, *rC.Files[i].Filename)
+			allChangedFiles = append(allChangedFiles, *rC.Files[i].Filename)
+			if *rC.Files[i].Status == "added" {
+				addedFiles = append(addedFiles, *rC.Files[i].Filename)
+			}
+			if *rC.Files[i].Status == "removed" {
+				deletedFiles = append(deletedFiles, *rC.Files[i].Filename)
+			}
+			if *rC.Files[i].Status == "modified" {
+				modifiedFiles = append(modifiedFiles, *rC.Files[i].Filename)
+			}
+			if *rC.Files[i].Status == "renamed" {
+				renamedFiles = append(renamedFiles, *rC.Files[i].Filename)
+			}
 		}
-		return result, nil
+		return allChangedFiles, addedFiles, deletedFiles, modifiedFiles, renamedFiles, nil
 	}
-	return []string{}, nil
+	return []string{}, []string{}, []string{}, []string{}, []string{}, nil
 }
 
 // getObject Get an object from a repository

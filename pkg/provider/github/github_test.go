@@ -568,10 +568,14 @@ func TestValidate(t *testing.T) {
 
 func TestGetFiles(t *testing.T) {
 	tests := []struct {
-		name        string
-		event       *info.Event
-		commitFiles []*github.CommitFile
-		commit      *github.RepositoryCommit
+		name                          string
+		event                         *info.Event
+		commitFiles                   []*github.CommitFile
+		commit                        *github.RepositoryCommit
+		expected_added_files_count    int
+		expected_deleted_files_count  int
+		expected_modified_files_count int
+		expected_renamed_files_count  int
 	}{
 		{
 			name: "pull-request",
@@ -584,10 +588,16 @@ func TestGetFiles(t *testing.T) {
 			commitFiles: []*github.CommitFile{
 				{
 					Filename: ptr.String("first.yaml"),
+					Status:   ptr.String("modified"),
 				}, {
 					Filename: ptr.String("second.doc"),
+					Status:   ptr.String("added"),
 				},
 			},
+			expected_added_files_count:    1,
+			expected_deleted_files_count:  0,
+			expected_modified_files_count: 1,
+			expected_renamed_files_count:  0,
 		},
 		{
 			name: "push",
@@ -601,11 +611,17 @@ func TestGetFiles(t *testing.T) {
 				Files: []*github.CommitFile{
 					{
 						Filename: ptr.String("first.yaml"),
+						Status:   ptr.String("renamed"),
 					}, {
 						Filename: ptr.String("second.doc"),
+						Status:   ptr.String("removed"),
 					},
 				},
 			},
+			expected_added_files_count:    0,
+			expected_deleted_files_count:  1,
+			expected_modified_files_count: 0,
+			expected_renamed_files_count:  1,
 		},
 	}
 	for _, tt := range tests {
@@ -639,16 +655,22 @@ func TestGetFiles(t *testing.T) {
 
 			ctx, _ := rtesting.SetupFakeContext(t)
 			provider := &Provider{Client: fakeclient}
-			fileData, err := provider.GetFiles(ctx, tt.event)
+			allFileData, addedFiles, deletedFiles, modifiedFiles, renamedFiles, err := provider.GetFiles(ctx, tt.event)
 			assert.NilError(t, err, nil)
+
+			assert.Equal(t, tt.expected_added_files_count, len(addedFiles))
+			assert.Equal(t, tt.expected_deleted_files_count, len(deletedFiles))
+			assert.Equal(t, tt.expected_modified_files_count, len(modifiedFiles))
+			assert.Equal(t, tt.expected_renamed_files_count, len(renamedFiles))
+
 			if tt.event.TriggerTarget == "pull_request" {
-				for i := range fileData {
-					assert.Equal(t, *tt.commitFiles[i].Filename, fileData[i])
+				for i := range allFileData {
+					assert.Equal(t, *tt.commitFiles[i].Filename, allFileData[i])
 				}
 			}
 			if tt.event.TriggerTarget == "push" {
-				for i := range fileData {
-					assert.Equal(t, *tt.commit.Files[i].Filename, fileData[i])
+				for i := range allFileData {
+					assert.Equal(t, *tt.commit.Files[i].Filename, allFileData[i])
 				}
 			}
 		})

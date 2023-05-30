@@ -448,10 +448,14 @@ func TestValidate(t *testing.T) {
 func TestGetFiles(t *testing.T) {
 	commitFiles := &gitlab.MergeRequest{}
 	tests := []struct {
-		name        string
-		event       *info.Event
-		mrchanges   *gitlab.MergeRequest
-		pushChanges []*gitlab.Diff
+		name                          string
+		event                         *info.Event
+		mrchanges                     *gitlab.MergeRequest
+		pushChanges                   []*gitlab.Diff
+		expected_added_files_count    int
+		expected_deleted_files_count  int
+		expected_modified_files_count int
+		expected_renamed_files_count  int
 	}{
 		{
 			name: "pull-request",
@@ -474,6 +478,10 @@ func TestGetFiles(t *testing.T) {
 						DeletedFile bool   `json:"deleted_file"`
 					}{NewPath: "test.txt"}),
 			},
+			expected_added_files_count:    1,
+			expected_deleted_files_count:  1,
+			expected_modified_files_count: 1,
+			expected_renamed_files_count:  1,
 		},
 		{
 			name: "push",
@@ -486,10 +494,20 @@ func TestGetFiles(t *testing.T) {
 			pushChanges: []*gitlab.Diff{
 				{
 					NewPath: "first.txt",
-				}, {
+					NewFile: true,
+				},
+				{
+					NewPath:     "third.yaml",
+					DeletedFile: true,
+				},
+				{
 					NewPath: "second.yaml",
 				},
 			},
+			expected_added_files_count:    1,
+			expected_deleted_files_count:  1,
+			expected_modified_files_count: 1,
+			expected_renamed_files_count:  0,
 		},
 	}
 	for _, tt := range tests {
@@ -508,8 +526,51 @@ func TestGetFiles(t *testing.T) {
 						NewFile     bool   `json:"new_file"`
 						RenamedFile bool   `json:"renamed_file"`
 						DeletedFile bool   `json:"deleted_file"`
-					}{NewPath: "test.txt"}),
+					}{NewPath: "modified.txt"}),
 			}
+			mergeFileChanges.Changes = append(commitFiles.Changes,
+				struct {
+					OldPath     string `json:"old_path"`
+					NewPath     string `json:"new_path"`
+					AMode       string `json:"a_mode"`
+					BMode       string `json:"b_mode"`
+					Diff        string `json:"diff"`
+					NewFile     bool   `json:"new_file"`
+					RenamedFile bool   `json:"renamed_file"`
+					DeletedFile bool   `json:"deleted_file"`
+				}{
+					NewPath: "added.txt",
+					NewFile: true,
+				})
+
+			mergeFileChanges.Changes = append(commitFiles.Changes,
+				struct {
+					OldPath     string `json:"old_path"`
+					NewPath     string `json:"new_path"`
+					AMode       string `json:"a_mode"`
+					BMode       string `json:"b_mode"`
+					Diff        string `json:"diff"`
+					NewFile     bool   `json:"new_file"`
+					RenamedFile bool   `json:"renamed_file"`
+					DeletedFile bool   `json:"deleted_file"`
+				}{
+					NewPath:     "deleted.txt",
+					DeletedFile: true,
+				})
+			mergeFileChanges.Changes = append(commitFiles.Changes,
+				struct {
+					OldPath     string `json:"old_path"`
+					NewPath     string `json:"new_path"`
+					AMode       string `json:"a_mode"`
+					BMode       string `json:"b_mode"`
+					Diff        string `json:"diff"`
+					NewFile     bool   `json:"new_file"`
+					RenamedFile bool   `json:"renamed_file"`
+					DeletedFile bool   `json:"deleted_file"`
+				}{
+					NewPath:     "renamed.txt",
+					RenamedFile: true,
+				})
 			if tt.event.TriggerTarget == "pull_request" {
 				mux.HandleFunc(fmt.Sprintf("/projects/0/merge_requests/%d/changes",
 					tt.event.PullRequestNumber), func(rw http.ResponseWriter, r *http.Request) {
@@ -535,16 +596,22 @@ func TestGetFiles(t *testing.T) {
 			}
 
 			providerInfo := &Provider{Client: fakeclient}
-			fileData, err := providerInfo.GetFiles(ctx, tt.event)
+			allFileData, addedFiles, deletedFiles, modifiedFiles, renamedFiles, err := providerInfo.GetFiles(ctx, tt.event)
 			assert.NilError(t, err, nil)
+
+			assert.Equal(t, tt.expected_added_files_count, len(addedFiles))
+			assert.Equal(t, tt.expected_deleted_files_count, len(deletedFiles))
+			assert.Equal(t, tt.expected_modified_files_count, len(modifiedFiles))
+			assert.Equal(t, tt.expected_renamed_files_count, len(renamedFiles))
+
 			if tt.event.TriggerTarget == "pull_request" {
-				for i := range fileData {
-					assert.Equal(t, tt.mrchanges.Changes[i].NewPath, fileData[i])
+				for i := range allFileData {
+					assert.Equal(t, tt.mrchanges.Changes[i].NewPath, allFileData[i])
 				}
 			}
 			if tt.event.TriggerTarget == "push" {
-				for i := range fileData {
-					assert.Equal(t, tt.pushChanges[i].NewPath, fileData[i])
+				for i := range allFileData {
+					assert.Equal(t, tt.pushChanges[i].NewPath, allFileData[i])
 				}
 			}
 		})

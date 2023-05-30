@@ -94,7 +94,7 @@ func (t celPac) ProgramOptions() []cel.ProgramOption {
 
 func (t celPac) pathChanged(vals ref.Val) ref.Val {
 	var match types.Bool
-	fileList, err := t.vcx.GetFiles(t.ctx, t.event)
+	fileList, _, _, _, _, err := t.vcx.GetFiles(t.ctx, t.event)
 	if err != nil {
 		return types.Bool(false)
 	}

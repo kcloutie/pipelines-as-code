@@ -297,36 +297,69 @@ func (v *Provider) GetCommitInfo(_ context.Context, runevent *info.Event) error 
 	return nil
 }
 
-func (v *Provider) GetFiles(_ context.Context, runevent *info.Event) ([]string, error) {
+func (v *Provider) GetFiles(_ context.Context, runevent *info.Event) ([]string, []string, []string, []string, []string, error) {
 	if v.Client == nil {
-		return []string{}, fmt.Errorf("no gitlab client has been initiliazed, " +
+		return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("no gitlab client has been initiliazed, " +
 			"exiting... (hint: did you forget setting a secret on your repo?)")
 	}
 	if runevent.TriggerTarget == "pull_request" {
 		mrchanges, _, err := v.Client.MergeRequests.GetMergeRequestChanges(v.sourceProjectID, runevent.PullRequestNumber, &gitlab.GetMergeRequestChangesOptions{})
 		if err != nil {
-			return []string{}, err
+			return []string{}, []string{}, []string{}, []string{}, []string{}, err
 		}
 
-		result := []string{}
+		allChangedFiles := []string{}
+		addedFiles := []string{}
+		deletedFiles := []string{}
+		modifiedFiles := []string{}
+		renamedFiles := []string{}
+
 		for _, change := range mrchanges.Changes {
-			result = append(result, change.NewPath)
+			allChangedFiles = append(allChangedFiles, change.NewPath)
+			if change.NewFile {
+				addedFiles = append(addedFiles, change.NewPath)
+			}
+			if change.DeletedFile {
+				deletedFiles = append(deletedFiles, change.NewPath)
+			}
+			if !change.RenamedFile && !change.DeletedFile && !change.NewFile {
+				modifiedFiles = append(modifiedFiles, change.NewPath)
+			}
+			if change.RenamedFile {
+				renamedFiles = append(renamedFiles, change.NewPath)
+			}
 		}
-		return result, nil
+		return allChangedFiles, addedFiles, deletedFiles, modifiedFiles, renamedFiles, nil
 	}
 
 	if runevent.TriggerTarget == "push" {
 		pushChanges, _, err := v.Client.Commits.GetCommitDiff(v.sourceProjectID, runevent.SHA, &gitlab.GetCommitDiffOptions{})
 		if err != nil {
-			return []string{}, err
+			return []string{}, []string{}, []string{}, []string{}, []string{}, err
 		}
-		result := []string{}
+		allChangedFiles := []string{}
+		addedFiles := []string{}
+		deletedFiles := []string{}
+		modifiedFiles := []string{}
+		renamedFiles := []string{}
 		for _, change := range pushChanges {
-			result = append(result, change.NewPath)
+			allChangedFiles = append(allChangedFiles, change.NewPath)
+			if change.NewFile {
+				addedFiles = append(addedFiles, change.NewPath)
+			}
+			if change.DeletedFile {
+				deletedFiles = append(deletedFiles, change.NewPath)
+			}
+			if !change.RenamedFile && !change.DeletedFile && !change.NewFile {
+				modifiedFiles = append(modifiedFiles, change.NewPath)
+			}
+			if change.RenamedFile {
+				renamedFiles = append(renamedFiles, change.NewPath)
+			}
 		}
-		return result, nil
+		return allChangedFiles, addedFiles, deletedFiles, modifiedFiles, renamedFiles, nil
 	}
-	return []string{}, nil
+	return []string{}, []string{}, []string{}, []string{}, []string{}, nil
 }
 
 func (v *Provider) CreateToken(_ context.Context, _ []string, _ *params.Run, _ *info.Event) (string, error) {

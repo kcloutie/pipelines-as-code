@@ -263,8 +263,8 @@ func (v *Provider) GetConfig() *info.ProviderConfig {
 	}
 }
 
-func (v *Provider) GetFiles(_ context.Context, _ *info.Event) ([]string, error) {
-	return []string{}, nil
+func (v *Provider) GetFiles(_ context.Context, _ *info.Event) ([]string, []string, []string, []string, []string, error) {
+	return []string{}, []string{}, []string{}, []string{}, []string{}, nil
 }
 
 func (v *Provider) CreateToken(_ context.Context, _ []string, _ *params.Run, _ *info.Event) (string, error) {
