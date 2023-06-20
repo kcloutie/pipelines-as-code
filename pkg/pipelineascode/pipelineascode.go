@@ -146,11 +146,16 @@ func (p *PacRun) startPR(ctx context.Context, match matcher.Match) (*tektonv1.Pi
 	// Add labels and annotations to pipelinerun
 	kubeinteraction.AddLabelsAndAnnotations(p.event, match.PipelineRun, match.Repo, p.vcx.GetConfig())
 
+	userAsksForPending := match.Repo.Spec.ConcurrencyLimit != nil && *match.Repo.Spec.ConcurrencyLimit != 0
+	// regardless of whether the user has set concurrency, we use the pending bit for a very short time to
+	// attempt to reduce updates conflicts between ourselves and other controllers that start updating the PipelineRun
+	// as soon as the underlying Pod(s) have started, so we have a better chance updating the PipelineRun after its
+	// initial creation
+	match.PipelineRun.Spec.Status = tektonv1.PipelineRunSpecStatusPending
+
 	// if concurrency is defined then start the pipelineRun in pending state and
 	// state as queued
-	if match.Repo.Spec.ConcurrencyLimit != nil && *match.Repo.Spec.ConcurrencyLimit != 0 {
-		// pending status
-		match.PipelineRun.Spec.Status = tektonv1.PipelineRunSpecStatusPending
+	if userAsksForPending {
 		// pac state as queued
 		match.PipelineRun.Labels[keys.State] = kubeinteraction.StateQueued
 		match.PipelineRun.Annotations[keys.State] = kubeinteraction.StateQueued
@@ -187,19 +192,23 @@ func (p *PacRun) startPR(ctx context.Context, match matcher.Match) (*tektonv1.Pi
 	}
 
 	// if pipelineRun is in pending state then report status as queued
-	if pr.Spec.Status == tektonv1.PipelineRunSpecStatusPending {
+	if pr.Spec.Status == tektonv1.PipelineRunSpecStatusPending && userAsksForPending {
 		status.Status = "queued"
 		status.Text = fmt.Sprintf(params.QueuingPipelineRunText, pr.GetName(), match.Repo.GetNamespace())
 	}
 
 	if err := p.vcx.CreateStatus(ctx, p.run.Clients.Tekton, p.event, p.run.Info.Pac, status); err != nil {
-		return nil, fmt.Errorf("cannot use the API on the provider platform to create a in_progress status: %w", err)
+		// we still return the created PR with error, and allow caller to decide what to do with the PR, and avoid
+		// unneeded SIGSEGV's
+		return pr, fmt.Errorf("cannot use the API on the provider platform to create a in_progress status: %w", err)
 	}
 
 	// Patch pipelineRun with logURL annotation, skips for GitHub App as we patch logURL while patching CheckrunID
 	if _, ok := pr.Annotations[keys.InstallationID]; !ok {
 		pr, err = action.PatchPipelineRun(ctx, p.logger, "logURL", p.run.Clients.Tekton, pr, getLogURLMergePatch(p.run.Clients, pr))
 		if err != nil {
+			// we still return the created PR with error, and allow caller to decide what to do with the PR, and avoid
+			// unneeded SIGSEGV's
 			return pr, fmt.Errorf("cannot patch pipelinerun %s: %w", pr.GetGenerateName(), err)
 		}
 	}
@@ -208,7 +217,18 @@ func (p *PacRun) startPR(ctx context.Context, match matcher.Match) (*tektonv1.Pi
 	if p.run.Info.Pac.SecretAutoCreation {
 		err := p.k8int.UpdateSecretWithOwnerRef(ctx, p.logger, pr.Namespace, gitAuthSecretName, pr)
 		if err != nil {
-			return nil, fmt.Errorf("cannot update pipelinerun %s with ownerRef: %w", pr.GetGenerateName(), err)
+			// we still return the created PR with error, and allow caller to decide what to do with the PR, and avoid
+			// unneeded SIGSEGV's
+			return pr, fmt.Errorf("cannot update pipelinerun %s with ownerRef: %w", pr.GetGenerateName(), err)
+		}
+	}
+
+	// now unset pending bit to get the other controllers, including the tekton pipeline controller, started with the PipelineRun,
+	// where they start making updates, unless user has specified concurrency control
+	if !userAsksForPending {
+		pr, err = action.PatchPipelineRun(ctx, p.logger, "specStatus", p.run.Clients.Tekton, pr, getPendingPatch(""))
+		if err != nil {
+			return pr, fmt.Errorf("cannot patch pipelinerun pending bit %s: %w", pr.GetGenerateName(), err)
 		}
 	}
 	return pr, nil
@@ -230,6 +250,14 @@ func getExecutionOrderPatch(order string) map[string]interface{} {
 			"annotations": map[string]string{
 				keys.ExecutionOrder: order,
 			},
+		},
+	}
+}
+
+func getPendingPatch(specStatus string) map[string]interface{} {
+	return map[string]interface{}{
+		"spec": map[string]interface{}{
+			"status": specStatus,
 		},
 	}
 }
