@@ -11,6 +11,7 @@ import (
 	"github.com/openshift-pipelines/pipelines-as-code/pkg/params/info"
 	testclient "github.com/openshift-pipelines/pipelines-as-code/pkg/test/clients"
 	kitesthelper "github.com/openshift-pipelines/pipelines-as-code/pkg/test/kubernetestint"
+	"github.com/openshift-pipelines/pipelines-as-code/pkg/test/provider"
 	"go.uber.org/zap"
 	zapobserver "go.uber.org/zap/zaptest/observer"
 	"gotest.tools/v3/assert"
@@ -29,6 +30,7 @@ func TestProcessTemplates(t *testing.T) {
 		expectedLogSnippet string
 		expectedError      bool
 		incomingPayload    string
+		vcx                *provider.TestProviderImp
 	}{
 		{
 			name:     "params/basic",
@@ -58,6 +60,11 @@ func TestProcessTemplates(t *testing.T) {
 				"source_url":            "",
 				"target_branch":         "",
 				"target_namespace":      "",
+				"all_changed_files":     "",
+				"added_files":           "",
+				"deleted_files":         "",
+				"modified_files":        "",
+				"renamed_files":         "",
 			},
 			repository: &v1alpha1.Repository{
 				Spec: v1alpha1.RepositorySpec{},
@@ -318,6 +325,34 @@ func TestProcessTemplates(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "params/changed files",
+			expected: map[string]string{
+				"params":            "batman",
+				"added_files":       "added.go",
+				"all_changed_files": "added.go,deleted.go,modified.go,renamed.go",
+				"deleted_files":     "deleted.go",
+				"modified_files":    "modified.go",
+				"renamed_files":     "renamed.go",
+			},
+			repository: &v1alpha1.Repository{
+				Spec: v1alpha1.RepositorySpec{
+					Params: &[]v1alpha1.Params{
+						{
+							Name:  "params",
+							Value: "batman",
+						},
+					},
+				},
+			},
+			vcx: &provider.TestProviderImp{
+				WantAllChangedFiles: []string{"added.go", "deleted.go", "modified.go", "renamed.go"},
+				WantAddedFiles:      []string{"added.go"},
+				WantDeletedFiles:    []string{"deleted.go"},
+				WantModifiedFiles:   []string{"modified.go"},
+				WantRenamedFiles:    []string{"renamed.go"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -333,10 +368,11 @@ func TestProcessTemplates(t *testing.T) {
 				tt.event = &info.Event{}
 			}
 			tt.event.Request = &info.Request{Payload: []byte(tt.incomingPayload)}
-			p := NewCustomParams(tt.event, repo, run, &kitesthelper.KinterfaceTest{GetSecretResult: tt.secretData}, nil)
+
+			p := NewCustomParams(tt.event, repo, run, &kitesthelper.KinterfaceTest{GetSecretResult: tt.secretData}, nil, tt.vcx)
 			stdata, _ := testclient.SeedTestData(t, ctx, testclient.Data{})
 			p.eventEmitter = events.NewEventEmitter(stdata.Kube, logger)
-			ret, err := p.GetParams(ctx)
+			ret, _, err := p.GetParams(ctx)
 			if tt.expectedError {
 				assert.Assert(t, err != nil, "expected error but got nil")
 			} else {

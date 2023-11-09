@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/gobwas/glob"
@@ -11,8 +12,15 @@ import (
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	"github.com/openshift-pipelines/pipelines-as-code/pkg/formatting"
 	"github.com/openshift-pipelines/pipelines-as-code/pkg/params/info"
 	"github.com/openshift-pipelines/pipelines-as-code/pkg/provider"
+)
+
+const (
+	// Utilizing this regex, the GetFiles function will be selectively executed exclusively when a property
+	// such as 'all_changed_files' or 'added_files' is specified within the CEL expression
+	changedFilesTags = "all_changed_files|added_files|deleted_files|modified_files|renamed_files"
 )
 
 func celEvaluate(ctx context.Context, expr string, event *info.Event, vcx provider.Interface) (ref.Val, error) {
@@ -53,15 +61,30 @@ func celEvaluate(ctx context.Context, expr string, event *info.Event, vcx provid
 		headerMap[strings.ToLower(k)] = v[0]
 	}
 
+	r := regexp.MustCompile(changedFilesTags)
+	changedFiles := provider.ChangedFiles{}
+
+	if r.MatchString(expr) {
+		changedFiles, err = vcx.GetFiles(ctx, event)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	data := map[string]interface{}{
-		"event":         event.TriggerTarget,
-		"event_title":   eventTitle,
-		"target_branch": event.BaseBranch,
-		"source_branch": event.HeadBranch,
-		"target_url":    event.BaseURL,
-		"source_url":    event.HeadURL,
-		"body":          jsonMap,
-		"headers":       headerMap,
+		"event":             event.TriggerTarget,
+		"event_title":       eventTitle,
+		"target_branch":     event.BaseBranch,
+		"source_branch":     event.HeadBranch,
+		"target_url":        event.BaseURL,
+		"source_url":        event.HeadURL,
+		"body":              jsonMap,
+		"headers":           headerMap,
+		"all_changed_files": strings.Join(formatting.UniqueStringArray(changedFiles.All), ","),
+		"added_files":       strings.Join(formatting.UniqueStringArray(changedFiles.Added), ","),
+		"deleted_files":     strings.Join(formatting.UniqueStringArray(changedFiles.Deleted), ","),
+		"modified_files":    strings.Join(formatting.UniqueStringArray(changedFiles.Modified), ","),
+		"renamed_files":     strings.Join(formatting.UniqueStringArray(changedFiles.Renamed), ","),
 	}
 
 	env, err := cel.NewEnv(
@@ -74,7 +97,12 @@ func celEvaluate(ctx context.Context, expr string, event *info.Event, vcx provid
 			decls.NewVar("target_branch", decls.String),
 			decls.NewVar("source_branch", decls.String),
 			decls.NewVar("target_url", decls.String),
-			decls.NewVar("source_url", decls.String)))
+			decls.NewVar("source_url", decls.String),
+			decls.NewVar("all_changed_files", decls.String),
+			decls.NewVar("added_files", decls.String),
+			decls.NewVar("deleted_files", decls.String),
+			decls.NewVar("modified_files", decls.String),
+			decls.NewVar("renamed_files", decls.String)))
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +141,14 @@ func (t celPac) ProgramOptions() []cel.ProgramOption {
 
 func (t celPac) pathChanged(vals ref.Val) ref.Val {
 	var match types.Bool
-	fileList, err := t.vcx.GetFiles(t.ctx, t.event)
+	changedFiles, err := t.vcx.GetFiles(t.ctx, t.event)
 	if err != nil {
 		return types.Bool(false)
 	}
-	for i := range fileList {
+	for i := range changedFiles.All {
 		if v, ok := vals.Value().(string); ok {
 			g := glob.MustCompile(v)
-			if g.Match(fileList[i]) {
+			if g.Match(changedFiles.All[i]) {
 				return types.Bool(true)
 			}
 		}

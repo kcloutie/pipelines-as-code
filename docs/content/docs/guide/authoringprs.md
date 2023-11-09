@@ -153,6 +153,11 @@ The fields available are :
 - `headers`: The full set of headers as passed by the Git provider. (example: `headers['x-github-event']` will get the event type on GitHub)
 - `.pathChanged`: a suffix function to a string which can be a glob of a path to
   check if changed (only `GitHub` and `Gitlab` provider is supported)
+* `all_changed_files`: The list of all files changed in the event (added, deleted, modified and renamed) separated by a comma. On pull request every file belonging to the pull request will be listed.
+* `added_files`: The list of added files in the event separated by a comma. On pull request every added file belonging to the pull request will be listed.
+* `deleted_files`: The list of deleted files in the event separated by a comma. On pull request every deleted file belonging to the pull request will be listed.
+* `modified_files`: The list of modified files in the event separated by a comma. On pull request every modified file belonging to the pull request will be listed.
+* `renamed_files`: The list of renamed files in the event separated by a comma. On pull request every renamed file belonging to the pull request will be listed.
 
 Compared to the simple "on-target" annotation matching, the CEL expression
 allows you to complex filtering and most importantly express negation.
@@ -171,6 +176,9 @@ You can find more information about the CEL language spec here :
 
 ### Matching PipelineRun by path change
 
+> *NOTE*: `Pipelines-as-Code` supports two ways to match files changed in a particular event. The `.pathChanged` suffix function supports [glob
+pattern](https://github.com/ganbarodigital/go_glob#what-does-a-glob-pattern-look-like) and does not support different types of "changes" i.e. added, modified, deleted and so on. The other option is to use fields directly related to changes files (`all_changed_files`, `added_files`, `deleted_files`, `modified_files`, `renamed_files`) which can target specific types of changed files and supports using regex matching through CEL.
+
 If you want to have a PipelineRun running only if a path has
 changed you can use the `.pathChanged` suffix function with a [glob
 pattern](https://github.com/ganbarodigital/go_glob#what-does-a-glob-pattern-look-like). Here
@@ -180,6 +188,27 @@ suffix) in the `docs` directory :
 ```yaml
 pipelinesascode.tekton.dev/on-cel-expression: |
   event == "pull_request" && "docs/*.md".pathChanged()
+```
+
+This example will match any changed file (added, modified, removed or renamed) that was in the `tmp` directory:
+
+```yaml
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      all_changed_files.matches('tmp\/')
+```
+
+This example will match any added file that was in the `src` or `pkg` directory:
+
+```yaml
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      added_files.matches('src\/|pkg\/')
+```
+
+This example will match modified files with the name of test.go:
+
+```yaml
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      modified_files.matches('test\.go')
 ```
 
 ### Matching PipelineRun on event title

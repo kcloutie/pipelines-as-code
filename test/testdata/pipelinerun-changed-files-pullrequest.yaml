@@ -1,0 +1,46 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: "\\ .PipelineName //"
+  annotations:
+    pipelinesascode.tekton.dev/target-namespace: "\\ .TargetNamespace //"
+    pipelinesascode.tekton.dev/on-cel-expression: >-
+      target_branch == "\\ .TargetBranch //" && 
+      event == "pull_request" && 
+      all_changed_files.matches("tekton/|deleted.txt")
+spec:
+  params:
+    - name: all_changed_files
+      value: "{{ all_changed_files }}"
+    - name: added_files
+      value: "{{ added_files }}"
+    - name: deleted_files
+      value: "{{ deleted_files }}"
+    - name: modified_files
+      value: "{{ modified_files }}"
+    - name: renamed_files
+      value: "{{ renamed_files }}"
+  pipelineSpec:
+    params:
+      - name: all_changed_files
+      - name: added_files
+      - name: deleted_files
+      - name: modified_files
+      - name: renamed_files
+    tasks:
+      - name: changed-files-pullrequest-params
+        taskSpec:
+          steps:
+            - name: test-changed-files-params-pull
+              image: registry.access.redhat.com/ubi9/ubi-micro
+              script: |
+                # reply Should be:
+                cat <<EOF
+                changed files...
+                all_changed_files: {{ all_changed_files }}
+                added_files: {{ added_files }}
+                deleted_files: {{ deleted_files }}
+                modified_files: {{ modified_files }}
+                renamed_files: {{ renamed_files }}
+                EOF
